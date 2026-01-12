@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="el">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Αναγνώριση Πολλαπλών Εγγράφων</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            background-color: #f3f4f6;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+        }
+
+        /* Χώρος κάτω για να μην κρύβεται το περιεχόμενο πίσω από το footer */
+        .page-wrapper {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 8px;
+            padding-bottom: 160px !important;
+            /* +50px για το capture */
+        }
+
+
+        .block-card {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.07);
+            border: 1px solid #e5e7eb;
+        }
+
+        .block-title {
+            font-size: 17px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .block-subtitle {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 10px;
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #video {
+            width: 100%;
+            display: block;
+            background: #000;
+        }
+
+        .frame-overlay {
+            position: absolute;
+            left: 5%;
+            right: 5%;
+            top: 22%;
+            bottom: 22%;
+            border: 2px dashed rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            pointer-events: none;
+        }
+
+        #capture {
+            position: fixed;
+            left: 50%;
+            bottom: 70px;
+            transform: translateX(-50%);
+            width: calc(100% - 32px);
+            max-width: 520px;
+            height: 56px;
+            border-radius: 999px;
+            border: none;
+            background: #198754;
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+            z-index: 1000;
+        }
+
+
+
+        #capture:disabled {
+            opacity: 0.5;
+            box-shadow: none;
+        }
+
+        #captured img {
+            width: 100%;
+            max-height: 260px;
+            object-fit: contain;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+            background: #f9fafb;
+            margin-top: 8px;
+        }
+
+        #canvas {
+            display: none;
+        }
+
+        #message {
+            font-size: 13px;
+            margin-top: 8px;
+            min-height: 18px;
+        }
+
+        #parsedFields {
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            padding: 8px;
+            background: #f9fafb;
+            max-height: 380px;
+            overflow-y: auto;
+        }
+
+        #parsedFields table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        #parsedFields td {
+            padding: 4px 6px;
+            vertical-align: middle;
+        }
+
+        #parsedFields tr:nth-child(odd) {
+            background: #edf2ff;
+        }
+
+        #parsedFields input[type="text"] {
+            width: 100%;
+            padding: 6px 8px;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            font-size: 14px;
+        }
+
+        #docTypeLabel {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+
+        #ocrResult {
+            display: none;
+        }
+
+        #imageUpload {
+            font-size: 15px;
+            padding: 10px 12px;
+        }
+
+        #runVision {
+            padding-top: 10px;
+            padding-bottom: 10px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        #addDocument {
+            display: block;
+            width: 100%;
+            margin-top: 8px;
+            font-weight: 600;
+            padding: 10px 16px;
+        }
+
+        /* Κουμπιά μέσα στις κάρτες εγγράφων */
+        .doc-card-actions {
+            margin-top: 8px;
+        }
+
+        .doc-card-actions .btn {
+            width: 100%;
+            font-size: 14px;
+            padding: 8px 12px;
+        }
+
+        /* Footer πιο πάνω για να μην ακουμπάει στο edge του κινητού */
+        .client-footer {
+            bottom: 20px;
+            /* <-- ΑΝΕΒΑΣΜΑ */
+            padding-bottom: env(safe-area-inset-bottom, 20px);
+        }
+
+
+        .client-footer .block-card {
+            margin-bottom: 0;
+            border-radius: 12px 12px 0 0;
+            box-shadow: 0 -2px 10px rgba(15, 23, 42, 0.15);
+        }
+
+        .client-footer {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            background: transparent;
+        }
+
+        /* Κάρτα footer: να δουλεύει σαν «κουτί» με scroll μέσα */
+        .client-footer .block-card {
+            margin-bottom: 0;
+            border-radius: 12px 12px 0 0;
+            box-shadow: 0 -2px 10px rgba(15, 23, 42, 0.15);
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Το button "Στοιχεία πελάτη" να μένει πάντα ορατό, ο πίνακας να scrol-larei */
+        #clientDataCollapse {
+            margin-top: 8px;
+            /* για mobile θα το περιορίσουμε παρακάτω */
+        }
+
+        /* Ο πίνακας να έχει ομοιόμορφες αποστάσεις */
+        #clientDataTable {
+            font-size: 14px;
+        }
+
+        #clientDataTable td {
+            padding: 6px 8px;
+            vertical-align: middle;
+            border-top: none;
+        }
+
+        #clientDataTable td:first-child {
+            width: 45%;
+            color: #6b7280;
+        }
+
+        /* Το κουμπί "Αποστολή στοιχείων" με λίγο «αέρα» */
+        #sendClientData {
+            margin-top: 4px;
+        }
+
+        /* 📱 Mobile ειδικά */
+        @media (max-width: 768px) {
+
+            /* Ολόκληρο το footer max ~60% της οθόνης */
+            .client-footer .block-card {
+                max-height: 60vh;
+            }
+
+            /* Το κομμάτι με τον πίνακα να κάνει scroll αν μεγαλώσει */
+            #clientDataCollapse {
+                max-height: 50vh;
+                overflow-y: auto;
+            }
+
+            /* Λίγο πιο «σφιχτό» για να χωράει ωραία */
+            #clientDataTable td {
+                padding: 5px 6px;
+                font-size: 13px;
+            }
+        }
+
+        .client-footer-toggle {
+            padding: 12px 16px;
+            /* λίγο πιο μικρό από πριν */
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .client-footer-toggle {
+                padding: 14px 18px;
+                /* mobile λίγο πιο άνετο, αλλά όχι τεράστιο */
+                font-size: 15px;
+            }
+        }
+
+        /* Inputs του collapsed "Στοιχεία πελάτη" */
+        #clientDataCollapse .form-control {
+            font-weight: 500;
+            /* πιο έντονο το typed text */
+            color: #111827;
+            /* πιο σκούρο (slate/gray) */
+        }
+
+        /* Placeholder πιο ήπιο */
+        #clientDataCollapse .form-control::placeholder {
+            color: #9ca3af;
+            /* πιο αχνό */
+            font-weight: 400;
+            /* κανονικό */
+            opacity: 1;
+            /* για Safari/Chrome να μην το αλλάζουν */
+        }
+
+        /* όταν γράφει ο χρήστης και το field είναι filled, ακόμα πιο “clean” */
+        #clientDataCollapse .form-control:not(:placeholder-shown) {
+            color: #0f172a;
+        }
+
+        /* Labels (αριστερή στήλη) πιο έντονα */
+        #clientDataTable td.text-muted {
+            color: #374151 !important;
+            font-weight: 600;
+            letter-spacing: .1px;
+        }
+
+        /* Ό,τι γράφεις στο input πιο έντονο */
+        #clientDataTable .form-control {
+            color: #111827;
+            font-weight: 600;
+        }
+
+        /* Placeholders πιο “ήπια” */
+        #clientDataTable .form-control::placeholder {
+            color: #9ca3af;
+            font-weight: 400;
+            opacity: 1;
+            /* iOS/Safari */
+        }
+
+        @media (min-width: 769px) {
+            .client-footer .block-card {
+                max-height: 55vh;
+            }
+
+            #clientDataCollapse {
+                max-height: 45vh;
+                overflow-y: auto;
+            }
+
+            .client-footer .block-card.is-open {
+                transform: translateY(-12vh);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-wrapper">
+
+        <!-- Εικόνα εγγράφου -->
+        <div class="block-card">
+            <div class="block-title">Σκάναρε το έγγραφο</div>
+            <div class="block-subtitle">
+                Μπορείς να χρησιμοποιήσεις την κάμερα ή να ανεβάσεις έτοιμη φωτογραφία.
+            </div>
+
+            <div class="mb-2">
+                <div class="d-grid gap-2">
+                    <button id="startCamera" class="btn btn-outline-primary btn-lg">
+                        Άνοιγμα κάμερας
+                    </button>
+
+                    <input id="imageUpload" type="file" accept="image/*" class="form-control form-control-lg">
+                </div>
+            </div>
+
+            <div class="video-wrapper mb-2">
+                <video id="video" autoplay playsinline></video>
+                <div class="frame-overlay"></div>
+                <button id="capture" type="button" style="display: none;">
+                    Λήψη Φωτογραφίας
+                </button>
+            </div>
+
+            <div id="captured"></div>
+            <canvas id="canvas"></canvas>
+
+            <div id="message" class="text-muted"></div>
+        </div>
+
+        <!-- Ανάγνωση εγγράφου -->
+        <div class="block-card">
+            <div class="d-grid gap-2 mb-1">
+                <button id="runVision" class="btn btn-success btn-lg w-100" type="button" disabled>
+                    Ανάγνωση εγγράφου
+                </button>
+            </div>
+
+            <pre id="ocrResult"></pre>
+        </div>
+
+        <!-- Στοιχεία εγγράφου -->
+        <div id="docDetailsCard" class="block-card" style="display:none;">
+            <div class="block-title">Στοιχεία εγγράφου</div>
+            <div class="block-subtitle">
+                Τα πεδία συμπληρώνονται αυτόματα. Έλεγξε και διόρθωσε ό,τι χρειάζεται πριν την αποθήκευση.
+            </div>
+
+            <div id="docTypeLabel">Τύπος εγγράφου: —</div>
+
+            <div id="parsedFields" class="mb-3">
+                <span class="text-muted" style="font-size: 13px;">
+                    Δεν έχουν φορτωθεί ακόμα στοιχεία.
+                </span>
+            </div>
+
+            <!-- Κουμπί: Καταχώρηση στον πίνακα πελάτη -->
+            <button id="registerClientData" class="btn btn-outline-dark w-100 mb-2" type="button" disabled>
+                Καταχώρηση στοιχείων πελάτη στον πίνακα
+            </button>
+
+            <!-- Τα παλιά κουμπιά σου μπορούν να μείνουν εδώ αν τα θες -->
+            <div class="d-grid gap-2 mb-2">
+                <button id="downloadImage" class="btn btn-outline-secondary" type="button" disabled>
+                    Λήψη εγγράφου
+                </button>
+
+                <button id="saveToServer" class="btn btn-primary" type="button" disabled>
+                    Αποθήκευση εγγράφου στον server
+                </button>
+            </div>
+            <!-- Einai disabled pros to paron-->
+            <button id="addDocument" class="btn btn-outline-primary w-100" type="button" disabled style="display:none;">
+                Προσθήκη εγγράφου
+            </button>
+            <div id="scanMoreWrapper" class="mt-3" style="display:none;">
+                <button id="scanMore" class="btn btn-success w-100">
+                    Σκάναρε περισσότερα έγγραφα
+                </button>
+            </div>
+        </div>
+
+
+
+        <div id="documentsListContainer" class="block-card" style="display:none; margin-top: 10px;">
+            <div class="block-title">Έγγραφα που έχουν προστεθεί</div>
+            <div class="block-subtitle">
+
+            </div>
+            <div id="documentsList"></div>
+        </div>
+
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Το νέο JS με multi-document λογική -->
+    <script src="app.js"></script>
+
+    <!-- Modal επιβεβαίωσης -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body">
+                    <p id="confirmModalMessage" class="mb-3"></p>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-secondary" id="confirmModalNo">
+                            Άκυρο
+                        </button>
+                        <button type="button" class="btn btn-primary" id="confirmModalYes">
+                            Ναι
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="client-footer mt-4">
+        <div class="block-card p-2">
+            <button class="btn client-footer-toggle w-100 d-flex justify-content-between align-items-center"
+                type="button" data-bs-toggle="collapse" data-bs-target="#clientDataCollapse" aria-expanded="false"
+                aria-controls="clientDataCollapse">
+                <span>Στοιχεία πελάτη</span>
+                <span id="clientCollapseArrow">▲</span>
+            </button>
+
+
+            <div class="collapse mt-3" id="clientDataCollapse">
+                <div class="table-responsive mb-3">
+                    <table id="clientDataTable" class="table table-sm mb-0">
+                        <tbody>
+                            <tr>
+                                <td class="text-muted" style="width:40%;">Επώνυμο *</td>
+                                <td>
+                                    <input id="clientSurnameInput" type="text" class="form-control form-control-sm"
+                                        placeholder="Επώνυμο">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Όνομα *</td>
+                                <td>
+                                    <input id="clientNameInput" type="text" class="form-control form-control-sm"
+                                        placeholder="Όνομα">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">E-mail *</td>
+                                <td>
+                                    <input id="clientEmailInputFooter" type="email" class="form-control form-control-sm"
+                                        placeholder="name@example.com">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Αριθμός Διπλώματος *</td>
+                                <td>
+                                    <input id="clientLicenseNumberInput" type="text"
+                                        class="form-control form-control-sm" placeholder="Αριθμός διπλώματος">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">
+                                    Αριθμός Ταυτότητας <span id="reqIdStar" class="req-muted">*</span>
+                                </td>
+                                <td>
+                                    <input id="clientIdCardNumberInput" type="text" class="form-control form-control-sm"
+                                        placeholder="Αριθμός ταυτότητας">
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td class="text-muted">
+                                    Αριθμός Διαβατηρίου <span id="reqPassStar" class="req-muted">*</span>
+                                </td>
+                                <td>
+                                    <input id="clientPassportNumberInput" type="text"
+                                        class="form-control form-control-sm" placeholder="Αριθμός διαβατηρίου">
+                                </td>
+                            </tr>
+
+
+
+                            <tr>
+                                <td class="text-muted">Ημ/νία γέννησης</td>
+                                <td>
+                                    <input id="clientBirthDateInput" type="text" class="form-control form-control-sm"
+                                        placeholder="π.χ. 01/01/1990">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Τηλέφωνο</td>
+                                <td>
+                                    <input id="clientPhoneInput" type="text" class="form-control form-control-sm"
+                                        placeholder="π.χ. 6912345678">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Φύλο</td>
+                                <td>
+                                    <input id="clientSexInput" type="text" class="form-control form-control-sm"
+                                        placeholder="π.χ. M / F">
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td class="text-muted">Τόπος γέννησης</td>
+                                <td>
+                                    <input id="clientBirthPlaceInput" type="text" class="form-control form-control-sm"
+                                        placeholder="Τόπος γέννησης">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Ημ/νία έκδοσης διπλώματος</td>
+                                <td>
+                                    <input id="clientLicenseIssueDateInput" type="text"
+                                        class="form-control form-control-sm" placeholder="π.χ. 01/01/2020">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Ημ/νία λήξης διπλώματος</td>
+                                <td>
+                                    <input id="clientLicenseExpiryDateInput" type="text"
+                                        class="form-control form-control-sm" placeholder="π.χ. 01/01/2030">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Ιθαγένεια (διαβατήριο)</td>
+                                <td>
+                                    <input id="clientPassportNationalityInput" type="text"
+                                        class="form-control form-control-sm" placeholder="π.χ. GRC">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Χώρα έκδοσης διαβατηρίου</td>
+                                <td>
+                                    <input id="clientPassportIssuingCountryInput" type="text"
+                                        class="form-control form-control-sm" placeholder="π.χ. GRC">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Ημ/νία λήξης διαβατηρίου</td>
+                                <td>
+                                    <input id="clientPassportExpiryDateInput" type="text"
+                                        class="form-control form-control-sm" placeholder="π.χ. 01/01/2030">
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td class="text-muted">Ιθαγένεια (ταυτότητα)</td>
+                                <td>
+                                    <input id="clientIdNationalityInput" type="text"
+                                        class="form-control form-control-sm" placeholder="π.χ. GRC">
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td class="text-muted">Χώρα έκδοσης ταυτότητας</td>
+                                <td>
+                                    <input id="clientIdIssuingCountryInput" type="text"
+                                        class="form-control form-control-sm" placeholder="π.χ. GRC">
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td class="text-muted">Ημ/νία λήξης ταυτότητας</td>
+                                <td>
+                                    <input id="clientIdExpiryDateInput" type="text" class="form-control form-control-sm"
+                                        placeholder="π.χ. 01/01/2030">
+                                </td>
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+                </div>
+
+                <button id="sendClientData" class="btn btn-success w-100">
+                    Αποστολή στοιχείων
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+
+            const sendBtn = document.getElementById("sendClientData");
+            const modalEl = document.getElementById("confirmModal");
+            const modalMsg = document.getElementById("confirmModalMessage");
+            const btnNo = document.getElementById("confirmModalNo");
+            const btnYes = document.getElementById("confirmModalYes");
+
+            if (!sendBtn || !modalEl) return;
+
+            const modal = new bootstrap.Modal(modalEl);
+
+            // 3 Πατάω "Ναι"
+            btnYes.addEventListener("click", function () {
+                modal.hide();
+
+                // TEST ΜΗΝΥΜΑ (δεν στέλνεται τίποτα)
+                setTimeout(() => {
+                    alert("Τα στοιχεία του πελάτη στάλθηκαν επιτυχώς.");
+                }, 300);
+            });
+
+        });
+    </script>
+
+</body>
+</html>

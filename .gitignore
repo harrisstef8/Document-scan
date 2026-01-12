@@ -1,0 +1,15 @@
+# env secrets
+.env
+
+# logs
+*.log
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# uploads/cache (αν έχεις)
+uploads/
+cache/
+tmp/
