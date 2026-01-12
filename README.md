@@ -6,6 +6,9 @@ This project is a web-based document scanning and processing system designed to 
 
 The application enables document scanning or file upload and automatically extracts relevant data, significantly reducing processing time and human error.
 
+## Live Demo
+https://document-scan.great-site.net/Document-scan
+
 ---
 
 ## Features
